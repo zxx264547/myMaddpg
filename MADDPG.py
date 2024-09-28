@@ -87,9 +87,10 @@ class ValueNetwork(nn.Module):
         return x
 
 
-class PVAgent:
-    def __init__(self, id, obs_dim, action_dim, hidden_dim):
-        self.id = id #光伏ID
+class Agent:
+    def __init__(self, agent_id, agent_type, obs_dim, action_dim, hidden_dim):
+        self.id = agent_id #ID
+        self.type = agent_type
         #初始化策略网络和价值网络
         self.policy_net = PolicyNetwork(obs_dim, action_dim, hidden_dim)
         self.target_policy_net = PolicyNetwork(obs_dim, action_dim, hidden_dim)
@@ -133,46 +134,6 @@ class PVAgent:
             target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
 
-class StorageAgent:
-    def __init__(self, id, obs_dim, action_dim, hidden_dim):
-        self.id = id
-
-        self.policy_net = PolicyNetwork(obs_dim, action_dim, hidden_dim)
-        self.target_policy_net = PolicyNetwork(obs_dim, action_dim, hidden_dim)
-        self.value_net = ValueNetwork(obs_dim, action_dim, hidden_dim)
-        self.target_value_net = ValueNetwork(obs_dim, action_dim, hidden_dim
-                                             )
-        self.value_optimizer = optim.Adam(self.value_net.parameters(), lr=2e-4)
-        self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-4)
-        self.value_criterion = nn.MSELoss()
-
-        use_cuda = torch.cuda.is_available()
-        self.device = torch.device("cuda" if use_cuda else "cpu")
-
-        self.policy_net.to(self.device)
-        self.target_policy_net.to(self.device)
-        self.value_net.to(self.device)
-        self.target_value_net.to(self.device)
-
-    def get_action(self, state, epsilon=0):
-        if random.random() < epsilon:
-            return np.random.uniform(-0.5, 0.5, self.policy_net.linear3.out_features)
-        else:
-            state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-            action = self.policy_net.forward(state)
-            # todo:动作约束
-            action = action.detach().cpu().numpy()[0]
-            # return np.clip(action, -1, 1)
-            return action
-
-    def update_target_networks(self, soft_tau):
-        for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-
-        for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
-            target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
-
-
 class MADDPG:
     #参数：光伏参数（输入维度，隐藏维度，输出维度），储能参数，光伏节点，储能节点，折扣因子，目标网络的软更新参数，缓冲区大小，采样大小
     def __init__(self, pv_params, storage_params, pv_bus, es_bus, gamma, beta, tau, buffer_size, batch_size):
@@ -186,8 +147,8 @@ class MADDPG:
         self.tau = tau
         self.batch_size = batch_size
         #构造多智能体
-        self.pv_agents = [PVAgent(i, *pv_params) for i in range(len(pv_bus))]
-        self.storage_agents = [StorageAgent(i, *storage_params) for i in range(len(es_bus))]
+        self.pv_agents = [Agent(i,'pv', *pv_params) for i in range(len(pv_bus))]
+        self.storage_agents = [Agent(i,'storage', *storage_params) for i in range(len(es_bus))]
         #初始化缓冲区
         self.pv_replay_buffer = ReplayBuffer(buffer_size)
         self.storage_replay_buffer = ReplayBuffer(buffer_size)
