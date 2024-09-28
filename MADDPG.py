@@ -317,9 +317,9 @@ class MADDPG:
             np_actions_storage = np.array(actions_storage)
             alltime_es_p_actions.append(np_actions_storage[:, 0])
             alltime_es_q_actions.append(np_actions_storage[:, 1])
-            # 单步奖励
-            alltime_pv_rewards.append(rewards_pv)
-            alltime_es_rewards.append(rewards_storage)
+            # # 单步奖励
+            # alltime_pv_rewards.append(rewards_pv)
+            # alltime_es_rewards.append(rewards_storage)
             # 计算功率损耗（所有线路的有功损耗 + 无功损耗）(标幺值)
             total_power_loss = ((env.network.res_line.pl_mw.sum()
                                      + env.network.res_line.ql_mvar.sum()) / env.network.sn_mva) * 0.1
@@ -347,8 +347,13 @@ class MADDPG:
             sum_reward = -voltage_violation * 1000
 
             # TODO:这里的rewards要考虑总体的rewards（论文中rewards的改变也是在这里体现）
-            global_reward_pv = self.beta * sum_reward + rewards_pv - total_power_loss
-            global_reward_es = self.beta * sum_reward + rewards_storage - total_power_loss
+            # global_reward_pv = self.beta * sum_reward + rewards_pv - total_power_loss * 0.1
+            # global_reward_es = self.beta * sum_reward + rewards_storage - total_power_loss * 0.1
+            global_reward_pv = self.beta * sum_reward + rewards_pv
+            global_reward_es = self.beta * sum_reward + rewards_storage
+            # # 单步奖励
+            alltime_pv_rewards.append(global_reward_pv)
+            alltime_es_rewards.append(global_reward_es)
             # print(f"global_reward = {global_reward_pv, global_reward_es}, total_power_loss = {total_power_loss},"
             #       f"sum_reward = {sum_reward}, rewards = {rewards_pv, rewards_storage} ")
             """End 计算全局奖励"""

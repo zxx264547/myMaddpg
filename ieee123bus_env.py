@@ -85,18 +85,18 @@ class IEEE123bus(gym.Env):
 
     def _get_state(self, agent_type, bus):
         if agent_type == 'pv':
-            if bus in self.network.sgen['bus'].values:
-                sgen_idx = self.network.sgen[self.network.sgen['bus'] == bus].index[0]
-                p_mw = self.network.sgen.at[sgen_idx, 'p_mw']
-                q_mvar = self.network.sgen.at[sgen_idx, 'q_mvar']
+            if bus in self.network.gen['bus'].values:
+                gen_idx = self.network.gen[self.network.gen['bus'] == bus].index[0]
+                p_mw = self.network.gen.at[gen_idx, 'p_mw']
+                q_mvar = self.network.gen.at[gen_idx, 'q_mvar']
                 v_pu = self.network.res_bus.at[bus, 'vm_pu']
                 load_p_mw = self.network.load.at[bus, 'p_mw'] if bus in self.network.load['bus'].values else 0.0
                 load_q_mvar = self.network.load.at[bus, 'q_mvar'] if bus in self.network.load['bus'].values else 0.0
 
-                # print(f" get local state: pv_id: {sgen_idx}, p_mw: {p_mw}, q_mvar:{q_mvar}, load_p_mw:{load_p_mw}, load_q_mvar:{load_q_mvar}, v_pu:{v_pu}")
+                # print(f" get local state: pv_id: {gen_idx}, p_mw: {p_mw}, q_mvar:{q_mvar}, load_p_mw:{load_p_mw}, load_q_mvar:{load_q_mvar}, v_pu:{v_pu}")
                 return np.array([p_mw, q_mvar, load_p_mw, load_q_mvar, v_pu])
             else:
-                print(f"Warning: Bus {bus} not found in sgen")
+                print(f"Warning: Bus {bus} not found in gen")
                 return None
         elif agent_type == 'storage':
             if bus in self.network.storage['bus'].values:
@@ -115,14 +115,14 @@ class IEEE123bus(gym.Env):
 
     def _apply_action(self, action, agent_type, bus):
         if agent_type == 'pv':
-            if bus in self.network.sgen['bus'].values:
-                sgen_idx = self.network.sgen[self.network.sgen['bus'] == bus].index[0]
+            if bus in self.network.gen['bus'].values:
+                gen_idx = self.network.gen[self.network.gen['bus'] == bus].index[0]
                 # TODO:是否需要确保动作在合理范围内
                 # q_mvar = np.clip(float(action), -1.0, 1.0)
-                # self.network.sgen.loc[sgen_idx, 'q_mvar'] = q_mvar
-                self.network.sgen.loc[sgen_idx, 'q_mvar'] = float(action)
+                # self.network.gen.loc[gen_idx, 'q_mvar'] = q_mvar
+                self.network.gen.loc[gen_idx, 'q_mvar'] = float(action)
             else:
-                print(f"Warning: Bus {bus} not found in sgen")
+                print(f"Warning: Bus {bus} not found in gen")
         elif agent_type == 'storage':
             if bus in self.network.storage['bus'].values:
                 storage_idx = self.network.storage[self.network.storage['bus'] == bus].index[0]

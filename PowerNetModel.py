@@ -3,7 +3,7 @@ import pandapower.networks as pn
 import pandapower.plotting as plot
 
 # 创建一个测试网络
-net = pn.case30()
+net = pn.case118()
 
 # 运行潮流计算
 pp.runpp(net)

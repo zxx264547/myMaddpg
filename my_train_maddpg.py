@@ -10,19 +10,21 @@ import pandapower.converter as pc
 
 def create_123bus(pv_buses, es_buses):
     # pp_net = pc.from_mpc('pandapower models/pandapower models/case_123.mat', casename_mpc_file='case_mpc')
-    pp_net = pp.networks.case39()
-    pp_net.sgen['p_mw'] = 0.0
-    pp_net.sgen['q_mvar'] = 0.0
+    pp_net = pp.networks.case118()
+    # pp_net.sgen['p_mw'] = 0.0
+    # pp_net.sgen['q_mvar'] = 0.0
 
     for bus in pv_buses:
         if bus in pp_net.bus.index:
-            pp.create_sgen(pp_net, bus, p_mw=1.0, q_mvar=1.0)
+            # pp.create_gen(pp_net, bus, p_mw=1.0, q_mvar=1.0)
+            pp.create_gen(pp_net, bus, p_mw=0.0, q_mvar=0.0, min_p_mw=0.0, max_p_mw=1.0, min_q_mvar=-5.0,
+                          max_q_mvar=5.0, controllable=True)
         else:
             print(f"  Warning: Bus {bus} not found in network bus index")
 
     for bus in es_buses:
         if bus in pp_net.bus.index:
-            pp.create_storage(pp_net, bus=bus, p_mw=0.5, max_e_mwh=2.0, soc_percent=50, min_e_mwh=0, q_mvar=0.1)
+            pp.create_storage(pp_net, bus, p_mw=0.0, max_e_mwh=2.0, soc_percent=50, min_e_mwh=0, q_mvar=0.1)
         else:
             print(f"  Warning: Bus {bus} not found in network bus index")
     print(f" create_123bus created")
@@ -49,7 +51,7 @@ def create_13bus(pv_buses, es_buses):
     return pp_net
 
 # 定义 PV 和 ES 节点
-pv_buses = np.array([4, 6]) - 1
+pv_buses = np.array([4, 6])
 es_buses = np.array([3, 8]) - 1
 # pv_buses = np.array([4, 6, 11, 32, 33, 37, 48, 39, 66, 71, 75]) - 1
 # es_buses = np.array([88, 90, 92, 104, 107]) - 1
