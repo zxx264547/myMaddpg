@@ -16,7 +16,6 @@ StorageAgent
 MADDPG
 """
 
-
 class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -91,6 +90,12 @@ class Agent:
     def __init__(self, agent_id, agent_type, obs_dim, action_dim, hidden_dim):
         self.id = agent_id #ID
         self.type = agent_type
+        # 每个智能体的重要参数
+        self.states = []
+        self.actions = []
+        self.rewards = []
+        self.next_states = []
+        self.dones = []
         #初始化策略网络和价值网络
         self.policy_net = PolicyNetwork(obs_dim, action_dim, hidden_dim)
         self.target_policy_net = PolicyNetwork(obs_dim, action_dim, hidden_dim)
@@ -133,6 +138,59 @@ class Agent:
         for target_param, param in zip(self.target_policy_net.parameters(), self.policy_net.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - soft_tau) + param.data * soft_tau)
 
+    def update_networks(self, states, actions, rewards, next_states, dones, gamma, tau):
+        self.states = torch.FloatTensor(states).to(self.device)
+        self.actions = torch.FloatTensor(actions).to(self.device)
+        self.rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+        self.next_states = torch.FloatTensor(next_states).to(self.device)
+        self.dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+
+        # 计算策略损失并优化策略网络
+        policy_loss = self.compute_policy_loss()
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
+
+        # 计算价值损失并优化价值网络
+        #TODO:此时的action应该是在线actor网络根据当前状态计算出来的，还是从采样池里采样出来的
+
+        # # 通过在线网络计算action
+        # policy_actions = policy_actions.detach().numpy()
+        # actions = torch.FloatTensor(policy_actions).to(agent.device)
+        value_loss = self.compute_value_loss(gamma)
+        # 通过采样得到action
+        # value_loss = self._compute_value_loss(agent, states, actions, rewards, next_states, dones)
+        self.value_optimizer.zero_grad()
+        value_loss.backward()
+        self.value_optimizer.step()
+
+        #更新目标网络的参数
+        self.update_target_networks(tau)
+
+        #根据当前的状态生成的动作来计算损失
+    def compute_policy_loss(self):
+        #通过观测值（状态）计算策略网络的生成动作
+        policy_actions = self.policy_net(self.states)
+        #计算损失（通过最小化损失来更新参数）
+        policy_loss = -self.value_net(self.states, policy_actions).mean()
+        return policy_loss
+    #根据与目标网络的差异来更新在线价值网络
+    def compute_value_loss(self, gamma):
+        # 计算目标Q值
+        with torch.no_grad():
+            next_actions = self.target_policy_net(self.next_states)
+            target_q = self.target_value_net(self.next_states, next_actions)
+            # todo:计算target_Q
+            #done为1时，表示终止状态，目标Q值为即时奖励；否则，要考虑未来奖励
+            target_q = self.rewards + (1 - self.dones) * gamma * target_q
+            # target_q = rewards + self.gamma * target_q
+        # 计算当前Q值
+
+        current_q = self.value_net(self.states, self.actions)
+        # 计算价值网络的损失
+        value_loss = self.value_criterion(current_q, target_q)
+
+        return value_loss
 
 class MADDPG:
     #参数：光伏参数（输入维度，隐藏维度，输出维度），储能参数，光伏节点，储能节点，折扣因子，目标网络的软更新参数，缓冲区大小，采样大小
@@ -177,61 +235,7 @@ class MADDPG:
         states, actions, rewards, next_states, dones = batch
         # 使用batch数据更新每个智能体
         for agent in agents:
-            self._update_agent(agent, states, actions, rewards, next_states, dones)
-
-    def _update_agent(self, agent, states, actions, rewards, next_states, dones):
-        states = torch.FloatTensor(states).to(agent.device)
-        actions = torch.FloatTensor(actions).to(agent.device)
-        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(agent.device)
-        next_states = torch.FloatTensor(next_states).to(agent.device)
-        dones = torch.FloatTensor(dones).unsqueeze(1).to(agent.device)
-
-        # 计算策略损失并优化策略网络
-        policy_loss = self._compute_policy_loss(agent, states)
-        agent.policy_optimizer.zero_grad()
-        policy_loss.backward()
-        agent.policy_optimizer.step()
-
-        # 计算价值损失并优化价值网络
-        #TODO:此时的action应该是在线actor网络根据当前状态计算出来的，还是从采样池里采样出来的
-
-        # # 通过在线网络计算action
-        # policy_actions = policy_actions.detach().numpy()
-        # actions = torch.FloatTensor(policy_actions).to(agent.device)
-        value_loss = self._compute_value_loss(agent, states, actions, rewards, next_states, dones)
-        # 通过采样得到action
-        # value_loss = self._compute_value_loss(agent, states, actions, rewards, next_states, dones)
-        agent.value_optimizer.zero_grad()
-        value_loss.backward()
-        agent.value_optimizer.step()
-
-        #更新目标网络的参数
-        agent.update_target_networks(self.tau)
-
-    #根据当前的状态生成的动作来计算损失
-    def _compute_policy_loss(self, agent, states):
-        #通过观测值（状态）计算策略网络的生成动作
-        policy_actions = agent.policy_net(states)
-        #计算损失（通过最小化损失来更新参数）
-        policy_loss = -agent.value_net(states, policy_actions).mean()
-        return policy_loss
-    #根据与目标网络的差异来更新在线价值网络
-    def _compute_value_loss(self, agent, states, actions, rewards, next_states, dones):
-        # 计算目标Q值
-        with torch.no_grad():
-            next_actions = agent.target_policy_net(next_states)
-            target_q = agent.target_value_net(next_states, next_actions)
-            # todo:计算target_Q
-            #done为1时，表示终止状态，目标Q值为即时奖励；否则，要考虑未来奖励
-            target_q = rewards + (1 - dones) * self.gamma * target_q
-            # target_q = rewards + self.gamma * target_q
-        # 计算当前Q值
-
-        current_q = agent.value_net(states, actions)
-        # 计算价值网络的损失
-        value_loss = agent.value_criterion(current_q, target_q)
-
-        return value_loss
+            agent.update_networks(states, actions, rewards, next_states, dones, self.gamma, self.tau)
 
     def train(self, num_episodes, pp_net, pv_bus, es_bus):
         #创建配电网环境
